@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>FaaS/SaaS Demo</title>
+</head>
+<body>
+    <h1>FaaS/SaaS Math Demo</h1>
+    <p>This demonstrates Function as a Service (FaaS) and Software as a Service (SaaS) concepts.</p>
+    <ul>
+        <li>Jobs are queued and processed asynchronously.</li>
+        <li>Multiple jobs run in parallel (up to 2 workers).</li>
+        <li>Wait time shows queuing, execution time shows processing.</li>
+        <li>All users see the same job history (SaaS).</li>
+    </ul>
+
+    <h2>Queue Status</h2>
+    <div id="queue-status">
+        <p>Max Workers: <span id="max-workers">3</span></p>
+        <p>Queued: <span id="queued-count">0</span></p>
+        <p>Processing: <span id="processing-count">0</span></p>
+        <p>Completed: <span id="completed-count">0</span></p>
+    </div>
+
+    <h2>Submit Job</h2>
+    <form onsubmit="submitJob(); return false;">
+        <label>Operation: 
+            <select id="operation">
+                <option value="add">Add</option>
+                <option value="subtract">Subtract</option>
+                <option value="multiply">Multiply</option>
+                <option value="divide">Divide</option>
+                <option value="power">Power</option>
+            </select>
+        </label><br>
+        <label>Number 1: <input type="number" id="num1" value="10"></label><br>
+        <label>Number 2: <input type="number" id="num2" value="5"></label><br>
+        <button type="submit">Submit Job</button>
+    </form>
+    <button onclick="submitMultipleJobs()">Submit 5 Jobs</button>
+    <button onclick="loadJobs()">Refresh</button>
+
+    <h2>Job History</h2>
+    <div id="jobs"></div>
+
+    <script>
+        function submitJob() {
+            const data = {
+                operation: document.getElementById('operation').value,
+                num1: document.getElementById('num1').value,
+                num2: document.getElementById('num2').value
+            };
+            
+            fetch('/submit', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            })
+            .then(r => r.json())
+            .then(result => {
+                console.log('Job submitted:', result.job_id);
+                setTimeout(loadJobs, 300);
+            });
+        }
+        
+        function submitMultipleJobs() {
+            for (let i = 0; i < 5; i++) {
+                setTimeout(() => {
+                    const data = {
+                        operation: 'multiply',
+                        num1: Math.floor(Math.random() * 10) + 1,
+                        num2: Math.floor(Math.random() * 10) + 1
+                    };
+                    
+                    fetch('/submit', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(data)
+                    });
+                }, i * 100);
+            }
+            
+            alert('Submitted 5 jobs!');
+            setTimeout(loadJobs, 500);
+        }
+        
+        function loadJobs() {
+            fetch('/jobs')
+            .then(r => r.json())
+            .then(jobs => {
+                const container = document.getElementById('jobs');
+                container.innerHTML = '';
+                
+                if (jobs.length === 0) {
+                    container.innerHTML = '<p>No jobs yet.</p>';
+                    return;
+                }
+                
+                jobs.forEach(job => {
+                    const div = document.createElement('div');
+                    div.style.border = '1px solid #ccc';
+                    div.style.margin = '10px 0';
+                    div.style.padding = '10px';
+                    
+                    let timingInfo = '';
+                    if (job.wait_time_ms !== undefined) {
+                        timingInfo = `
+                            <p>Wait Time: ${job.wait_time_ms}ms</p>
+                            <p>Execution Time: ${job.execution_time_ms}ms</p>
+                            <p>Total Time: ${job.total_time_ms}ms</p>
+                        `;
+                    }
+                    
+                    div.innerHTML = `
+                        <p><strong>Job ID:</strong> ${job.job_id}</p>
+                        <p><strong>Status:</strong> ${job.status}</p>
+                        <p><strong>Operation:</strong> ${job.operation} ${job.num1} ${job.num2}</p>
+                        ${job.result ? `<p><strong>Result:</strong> ${job.result}</p>` : ''}
+                        ${timingInfo}
+                    `;
+                    container.appendChild(div);
+                });
+            });
+        }
+        
+        function updateQueueStatus() {
+            fetch('/queue-status')
+            .then(r => r.json())
+            .then(status => {
+                document.getElementById('max-workers').textContent = status.max_workers;
+                document.getElementById('queued-count').textContent = status.queued_count;
+                document.getElementById('processing-count').textContent = status.processing_count;
+                document.getElementById('completed-count').textContent = status.completed_count;
+            });
+        }
+        
+        setInterval(() => {
+            loadJobs();
+            updateQueueStatus();
+        }, 1000);
+        
+        loadJobs();
+        updateQueueStatus();
+    </script>
+</body>
+</html>
